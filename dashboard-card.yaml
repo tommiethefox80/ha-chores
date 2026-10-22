@@ -1,0 +1,23 @@
+# Chores – Home Assistant dashboard card
+# Dashboard → ✏️ Edit → + Add card → Manual, then paste everything below this line.
+type: markdown
+title: Jobs today
+content: |
+  {% set kids = states.sensor
+     | selectattr('entity_id', 'match', 'sensor\.chores_.*_due_today$')
+     | list %}
+  {% for s in kids %}
+
+  **{{ s.attributes.emoji }} {{ s.attributes.child }}** – {{ s.attributes.done_today }}/{{ s.attributes.total_today }} done{{ ', ' ~ s.attributes.overdue ~ ' overdue' if s.attributes.overdue }}
+
+  {% for j in s.attributes.jobs %}
+  - {{ '🔴' if j.overdue else '⬜️' }} {{ j.emoji }} {{ j.name }}{{ ' · by ' ~ j.due_time if j.due_time }}{{ ' · £%.2f' % (j.value / 100) if j.value }}
+  {% else %}
+  - ✅ All done for today
+  {% endfor %}
+  {% else %}
+  No chores sensors yet – open the Chores panel once.
+  {% endfor %}
+
+  {% set w = states('sensor.chores_waiting_check') | int(0) %}
+  {% if w %}⏳ **{{ w }}** waiting for you to check{% endif %}

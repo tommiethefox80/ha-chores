@@ -36,6 +36,20 @@ Notifications go through Home Assistant's `notify` services, so any phone or tab
 
 Tapping a notification opens the Chores panel. Reminders more than 30 minutes old are skipped after a restart, so you won't get a burst of stale alerts.
 
+## Dashboard sensors
+
+The add-on publishes sensors to Home Assistant (refreshed every 30 seconds and straight after any change):
+
+| Sensor | State | Attributes |
+|---|---|---|
+| `sensor.chores_<child>_due_today` | jobs still to do today | `jobs` (name, emoji, kind, due_time, overdue, value), `done_today`, `total_today`, `overdue`, `waiting_check` |
+| `sensor.chores_<child>_balance` | pocket money in £ | `pending` |
+| `sensor.chores_waiting_check` | completions waiting for a parent | `items_waiting` |
+
+A ready-made card is in [`dashboard-card.yaml`](https://github.com/tommiethefox80/ha-chores/blob/main/dashboard-card.yaml): Dashboard → Edit → Add card → Manual, and paste it in. The sensors can also drive automations, e.g. flash a light at 19:00 if `sensor.chores_evie_due_today` is above 0.
+
+These are pushed states, not integration entities: they have no unique ID (so can't be renamed in the UI) and briefly show as unavailable after an HA restart until the add-on re-sends them.
+
 ## Local run
 
 ```

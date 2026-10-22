@@ -457,7 +457,58 @@ async function initHa() {
   try { const info = await haFetch(`${SUP_URL}/addons/self/info`); panelUrl = `/hassio/ingress/${info.data.slug}`; }
   catch (e) { console.error('Could not read add-on info:', e.message); }
 }
-initHa();
+// ---------------------------------------------------------------- HA sensors (for dashboards)
+// sensor.chores_<child>_due_today – state = jobs still to do today; attributes list them
+// sensor.chores_<child>_balance   – pocket money in £
+// sensor.chores_waiting_check      – completions waiting for a parent
+const slugify = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'child';
+const lastPushed = new Map();
+let lastFullPush = 0;
+
+async function pushState(entity, state, attributes, force) {
+  const body = JSON.stringify({ state: String(state), attributes });
+  if (!force && lastPushed.get(entity) === body) return;
+  await haFetch(`${HA_URL}/states/${entity}`, { method: 'POST', body });
+  lastPushed.set(entity, body);
+}
+
+async function publishSensors() {
+  if (!HA_URL) return;
+  // HA forgets pushed states when it restarts, so re-send everything every 5 minutes
+  const force = Date.now() - lastFullPush > 5 * 60 * 1000;
+  try {
+    for (const k of q('SELECT id FROM children ORDER BY id').all()) {
+      const d = dashboard(k.id), slug = slugify(d.child.name);
+      const all = [...d.routines, ...d.todays];
+      const open = all.filter(c => !c.completion || c.completion.status === 'rejected');
+      const jobs = open.map(c => ({ name: c.name, emoji: c.emoji, kind: c.kind, due_time: c.due_time || null,
+        overdue: !!(c.due_time && d.now > c.due_time), value: c.value }))
+        .sort((a, b) => (a.due_time || '99:99').localeCompare(b.due_time || '99:99'));
+      await pushState(`sensor.chores_${slug}_due_today`, open.length, {
+        friendly_name: `${d.child.name} jobs to do today`, icon: open.length ? 'mdi:clipboard-text-clock' : 'mdi:check-all',
+        unit_of_measurement: 'jobs', state_class: 'measurement',
+        child: d.child.name, emoji: d.child.emoji, jobs, total_today: all.length,
+        done_today: all.length - open.length, overdue: jobs.filter(j => j.overdue).length,
+        waiting_check: all.filter(c => c.completion?.status === 'pending').length, panel_url: panelUrl,
+      }, force);
+      await pushState(`sensor.chores_${slug}_balance`, (d.money.balance / 100).toFixed(2), {
+        friendly_name: `${d.child.name} pocket money`, icon: 'mdi:piggy-bank', unit_of_measurement: '£',
+        device_class: 'monetary', pending: (d.money.pending / 100).toFixed(2),
+      }, force);
+    }
+    const pending = q(`SELECT c.date, ch.name, ch.emoji, k.name child FROM completions c JOIN chores ch ON ch.id=c.chore_id
+                       JOIN children k ON k.id=c.child_id WHERE c.status='pending' ORDER BY c.date DESC`).all();
+    await pushState('sensor.chores_waiting_check', pending.length, {
+      friendly_name: 'Chores waiting to be checked', icon: 'mdi:account-check', unit_of_measurement: 'jobs', items_waiting: pending, panel_url: panelUrl,
+    }, force);
+    if (force) lastFullPush = Date.now();
+  } catch (e) { console.error('sensor publish failed:', e.message); }
+}
+let publishTimer = null;
+const schedulePublish = () => { clearTimeout(publishTimer); publishTimer = setTimeout(publishSensors, 500); };
+
+initHa().then(publishSensors);
+setInterval(publishSensors, 30 * 1000); // keeps overdue flags and the new day current
 setInterval(reminderTick, 30 * 1000);
 setTimeout(reminderTick, 5000);
 
@@ -478,6 +529,7 @@ const server = http.createServer(async (req, res) => {
       const ctx = { req, params: m.groups || {}, query: Object.fromEntries(url.searchParams), headers: {}, me: identify(req) };
       ctx.body = ['POST', 'PUT'].includes(req.method) ? await readBody(req) : {};
       const out = await r.handler(ctx);
+      if (req.method !== 'GET') schedulePublish();
       return send(res, 200, out, ctx.headers);
     }
     send(res, 404, { error: 'Not found' });
