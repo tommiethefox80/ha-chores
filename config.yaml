@@ -1,0 +1,19 @@
+name: Chores
+version: "0.1.0"
+slug: chores
+description: Chores and pocket money tracker for the kids
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:broom
+panel_title: Chores
+map:
+  - data:rw
+options: {}
+schema: {}

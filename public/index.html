@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chores</title>
+<style>
+  :root {
+    --bg: #f6f3ee; --card: #ffffff; --ink: #1f1d1a; --muted: #6f6a62; --line: #e6e1d8;
+    --accent: #ff8a3d; --accent-ink: #fff; --good: #2fa36b; --warn: #e8b931; --bad: #d9534f;
+    --radius: 18px; --shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1917; --card: #262320; --ink: #f3efe8; --muted: #a39d93; --line: #3a352f; --shadow: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { padding: 16px; padding-bottom: 80px; max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 6px 0 14px; }
+  h2 { font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  button { font: inherit; border: 0; border-radius: 12px; padding: 10px 16px; background: var(--line); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.good { background: var(--good); color: #fff; }
+  button.bad { background: var(--bad); color: #fff; }
+  button.small { padding: 6px 10px; font-size: 14px; border-radius: 9px; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); width: 100%; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .chore { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; border: 2px solid var(--line); margin-bottom: 10px; cursor: pointer; user-select: none; }
+  .chore .emoji { font-size: 34px; width: 48px; text-align: center; }
+  .chore .name { font-weight: 600; font-size: 18px; }
+  .chore .tick { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 20px; }
+  .chore.done { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, var(--card)); }
+  .chore.done .tick { background: var(--good); border-color: var(--good); color: #fff; }
+  .chore.pending { border-color: var(--warn); }
+  .chore.pending .tick { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .bar { height: 14px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--good); border-radius: 99px; transition: width .4s; }
+  .money { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; background: var(--line); color: var(--muted); }
+  .pill.pending { background: var(--warn); color: #000; } .pill.approved { background: var(--good); color: #fff; } .pill.rejected { background: var(--bad); color: #fff; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+  .tabs button { white-space: nowrap; } .tabs button.on { background: var(--ink); color: var(--bg); }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 16px auto; }
+  .pad button { font-size: 26px; padding: 18px; border-radius: 16px; }
+  .dots { text-align: center; font-size: 30px; letter-spacing: 8px; min-height: 44px; }
+  .kids { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .kid { text-align: center; padding: 20px 10px; font-size: 18px; font-weight: 600; cursor: pointer; }
+  .kid .emoji { font-size: 44px; display: block; }
+  .list > div { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .list > div:last-child { border-bottom: 0; }
+  .days { display: flex; gap: 6px; } .days button { padding: 8px 0; flex: 1; } .days button.on { background: var(--accent); color: #fff; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .err { color: var(--bad); font-size: 14px; min-height: 20px; text-align: center; }
+  dialog { border: 0; border-radius: var(--radius); padding: 20px; max-width: 420px; width: calc(100% - 32px); background: var(--card); color: var(--ink); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .celebrate { animation: pop .5s ease; }
+  @keyframes pop { 0% { transform: scale(.9); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<dialog id="dlg"></dialog>
+
+<script>
+// ------------------------------------------------------------ helpers
+const $ = (s, r = document) => r.querySelector(s);
+const app = $('#app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const gbp = (p) => (p < 0 ? '-' : '') + '£' + (Math.abs(p) / 100).toFixed(2);
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const niceDate = (s) => { const [y, m, d] = s.split('-'); return `${Number(d)} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1]}`; };
+const freqLabel = (c) => c.frequency === 'daily' ? 'Every day' : c.frequency === 'weekly' ? 'Once a week' : c.frequency === 'anytime' ? 'Any time' : c.days.split(',').map(d => DAYS[d - 1]).join(' ');
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const GET = (p) => api('GET', p), POST = (p, b) => api('POST', p, b || {}), PUT = (p, b) => api('PUT', p, b), DEL = (p) => api('DELETE', p);
+
+let toastTimer;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+function form(html, onSubmit, title) {
+  const d = $('#dlg');
+  d.innerHTML = `<form method="dialog"><h3 style="margin:0 0 6px">${esc(title)}</h3>${html}<div class="err" id="ferr"></div>
+    <div class="actions"><button type="button" id="fcancel">Cancel</button><button class="primary" id="fok">Save</button></div></form>`;
+  $('#fcancel', d).onclick = () => d.close();
+  $('form', d).onsubmit = async (e) => { e.preventDefault(); try { await onSubmit(new FormData(e.target), d); d.close(); } catch (err) { $('#ferr', d).textContent = err.message; } };
+  d.showModal();
+  return d;
+}
+const confirmDlg = (msg) => new Promise(res => {
+  const d = $('#dlg'); d.innerHTML = `<p>${esc(msg)}</p><div class="actions"><button id="no">No</button><button class="bad" id="yes">Yes</button></div>`;
+  $('#no', d).onclick = () => { d.close(); res(false); }; $('#yes', d).onclick = () => { d.close(); res(true); }; d.showModal();
+});
+
+// ------------------------------------------------------------ state & routing
+let me = null;
+async function boot() {
+  me = await GET('api/me');
+  if (me.role === 'setup') return renderSetup();
+  if (me.role === 'guest') return renderPin();
+  if (me.role === 'child') return renderChild(me.childId);
+  return renderParent();
+}
+const logoutBtn = () => me.via === 'pin' ? `<button class="small" onclick="POST('api/logout').then(boot)">Lock</button>` : '';
+
+// ------------------------------------------------------------ setup & pin
+function renderSetup() {
+  app.innerHTML = `<div class="card" style="max-width:420px;margin:40px auto;text-align:center">
+    <h1>Welcome 👋</h1><p class="muted">First, set a parent PIN. You'll use it on the kitchen tablet to approve chores and pay out.</p>
+    <input id="spin" inputmode="numeric" pattern="\\d*" placeholder="4–8 digit PIN" style="text-align:center;font-size:24px">
+    <div class="err" id="serr"></div><button class="primary" id="sgo" style="width:100%">Set PIN</button></div>`;
+  $('#sgo').onclick = async () => { try { await POST('api/setup', { pin: $('#spin').value }); boot(); } catch (e) { $('#serr').textContent = e.message; } };
+}
+function renderPin() {
+  let buf = '';
+  app.innerHTML = `<div class="card" style="max-width:420px;margin:40px auto;text-align:center">
+    <h1>Who's this?</h1><p class="muted">Enter your PIN</p><div class="dots" id="dots"></div><div class="err" id="perr"></div>
+    <div class="pad">${[1,2,3,4,5,6,7,8,9,'⌫',0,'✓'].map(k => `<button data-k="${k}">${k}</button>`).join('')}</div></div>`;
+  const draw = () => $('#dots').textContent = '●'.repeat(buf.length);
+  const submit = async () => { try { await POST('api/pin', { pin: buf }); boot(); } catch (e) { $('#perr').textContent = e.message; buf = ''; draw(); } };
+  app.querySelectorAll('.pad button').forEach(b => b.onclick = () => {
+    const k = b.dataset.k;
+    if (k === '⌫') buf = buf.slice(0, -1); else if (k === '✓') return submit(); else if (buf.length < 8) buf += k;
+    draw(); if (buf.length >= 4 && k !== '⌫') { /* auto-submit at parent/child PIN length is unknown, so wait for ✓ */ }
+  });
+}
+
+// ------------------------------------------------------------ child dashboard
+function choreRow(c, canUndo) {
+  const st = c.completion ? c.completion.status : null;
+  const cls = st === 'approved' ? 'done' : st === 'pending' ? 'pending' : '';
+  const tick = st === 'approved' ? '✓' : st === 'pending' ? '⏳' : '';
+  const note = st === 'pending' ? 'Waiting for a grown-up to check' : st === 'approved' ? 'Done!' : freqLabel(c);
+  return `<div class="chore ${cls}" data-id="${c.id}" data-cid="${c.completion ? c.completion.id : ''}" data-st="${st || ''}">
+    <div class="emoji">${esc(c.emoji)}</div>
+    <div class="grow"><div class="name">${esc(c.name)}</div><div class="muted">${note}</div></div>
+    <div style="font-weight:600">${c.value ? gbp(c.value) : ''}</div><div class="tick">${tick}</div></div>`;
+}
+function dashboardHtml(d, asParent) {
+  const m = d.money;
+  const todayDone = d.todays.filter(c => c.completion && c.completion.status !== 'rejected').length;
+  return `
+    <div class="card celebrate" style="text-align:center">
+      <div class="muted">${esc(d.child.name)}'s pocket money</div>
+      <div class="money">${gbp(m.balance)}</div>
+      ${m.pending ? `<div class="muted">+ ${gbp(m.pending)} waiting to be checked</div>` : ''}
+    </div>
+    ${d.bundles.map(b => {
+      const pct = Math.min(100, Math.round(b.progress.approved / b.target * 100));
+      const left = Math.max(0, b.target - b.progress.approved);
+      return `<div class="card"><div class="row"><div class="grow"><strong>🎯 ${esc(b.name)}</strong>
+        <div class="muted">${b.progress.approved} of ${b.target} chores this ${b.period} · ends ${niceDate(b.progress.end)}</div></div>
+        <div style="font-weight:700;color:var(--good)">${gbp(b.reward)}</div></div>
+        <div class="bar" style="margin-top:10px"><div style="width:${pct}%"></div></div>
+        <div class="muted" style="margin-top:6px">${left === 0 ? '🎉 Goal reached – reward lands at the end of the ' + b.period + '!' : left + ' more to go' + (b.progress.pending ? ` (${b.progress.pending} waiting to be checked)` : '')}</div></div>`;
+    }).join('')}
+    <h2>Today ${d.todays.length ? `· ${todayDone}/${d.todays.length}` : ''}</h2>
+    ${d.todays.length ? d.todays.map(c => choreRow(c)).join('') : '<div class="card muted">Nothing due today 🎈</div>'}
+    ${d.anytime.length ? `<h2>Extra jobs</h2>${d.anytime.map(c => choreRow(c)).join('')}` : ''}
+    <h2>Recent</h2>
+    <div class="card list">${d.history.length ? d.history.slice(0, 10).map(h => `<div><span>${esc(h.emoji)}</span><span class="grow">${esc(h.name)} <span class="muted">${niceDate(h.date)}</span></span><span class="pill ${h.status}">${h.status}</span><span>${gbp(h.value)}</span></div>`).join('') : '<div class="muted">No chores done yet</div>'}</div>
+    ${d.payouts.length ? `<h2>Paid out</h2><div class="card list">${d.payouts.map(p => `<div><span class="grow">${niceDate(p.date)} ${p.note ? '· ' + esc(p.note) : ''}</span><span>${gbp(p.amount)}</span></div>`).join('')}</div>` : ''}`;
+}
+function wireChores(container, reload) {
+  container.querySelectorAll('.chore').forEach(el => el.onclick = async () => {
+    const st = el.dataset.st;
+    try {
+      if (!st || st === 'rejected') { await POST('api/complete', { choreId: Number(el.dataset.id) }); toast('Nice one! ⭐'); }
+      else if (st === 'pending') { if (await confirmDlg('Undo this chore?')) await DEL('api/completions/' + el.dataset.cid); }
+      else if (st === 'approved' && me.role === 'parent') { if (await confirmDlg('Remove this approved chore?')) await DEL('api/completions/' + el.dataset.cid); }
+      else return toast('Already done – well done!');
+      reload();
+    } catch (e) { toast(e.message); }
+  });
+}
+async function renderChild(childId) {
+  const d = await GET('api/dashboard/' + childId);
+  app.innerHTML = `<div class="topbar"><h1>${esc(d.child.emoji)} Hi ${esc(d.child.name)}!</h1>${logoutBtn()}</div>${dashboardHtml(d)}`;
+  wireChores(app, () => renderChild(childId));
+}
+
+// ------------------------------------------------------------ parent
+let ptab = 'kids', pkid = null;
+async function renderParent() {
+  const pending = await GET('api/pending');
+  app.innerHTML = `<div class="topbar"><h1>Chores</h1>${logoutBtn()}</div>
+    <div class="tabs">
+      <button class="${ptab === 'kids' ? 'on' : ''}" data-t="kids">Kids</button>
+      <button class="${ptab === 'approve' ? 'on' : ''}" data-t="approve">To check${pending.length ? ' · ' + pending.length : ''}</button>
+      <button class="${ptab === 'manage' ? 'on' : ''}" data-t="manage">Set up</button>
+      <button class="${ptab === 'settings' ? 'on' : ''}" data-t="settings">Settings</button>
+    </div><div id="ptab"></div>`;
+  app.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { ptab = b.dataset.t; pkid = null; renderParent(); });
+  const el = $('#ptab');
+  if (ptab === 'kids') return renderKids(el);
+  if (ptab === 'approve') return renderApprove(el, pending);
+  if (ptab === 'manage') return renderManage(el);
+  return renderSettings(el);
+}
+
+async function renderKids(el) {
+  const kids = (await GET('api/me')).children;
+  if (!kids.length) { el.innerHTML = `<div class="card">No children yet – add one under <b>Set up</b>.</div>`; return; }
+  if (pkid === null && kids.length === 1) pkid = kids[0].id;
+  if (pkid === null) {
+    el.innerHTML = `<div class="kids">${kids.map(k => `<div class="card kid" data-id="${k.id}"><span class="emoji">${esc(k.emoji)}</span>${esc(k.name)}</div>`).join('')}</div>`;
+    el.querySelectorAll('.kid').forEach(k => k.onclick = () => { pkid = Number(k.dataset.id); renderKids(el); });
+    return;
+  }
+  const d = await GET('api/dashboard/' + pkid);
+  el.innerHTML = `<div class="row" style="margin-bottom:10px">${kids.length > 1 ? `<button class="small" id="back">← All kids</button>` : ''}
+      <div class="grow"></div><button class="small primary" id="payout">Pay out</button></div>
+    ${dashboardHtml(d, true)}
+    <div class="muted" style="margin-top:8px">Earned ${gbp(d.money.earnedChores)} from chores + ${gbp(d.money.earnedBundles)} from goals − ${gbp(d.money.paid)} paid out. Tap a chore to tick it off on ${esc(d.child.name)}'s behalf (parent ticks are approved straight away).</div>`;
+  if ($('#back', el)) $('#back', el).onclick = () => { pkid = null; renderKids(el); };
+  $('#payout', el).onclick = () => form(`<label>Amount (£)</label><input name="amount" type="number" step="0.01" min="0.01" value="${(d.money.balance / 100).toFixed(2)}" required>
+      <label>Note</label><input name="note" placeholder="e.g. Saturday pocket money">`,
+    async (f) => { await POST('api/payouts', { childId: pkid, amount: Math.round(Number(f.get('amount')) * 100), note: f.get('note') }); toast('Paid out'); renderKids(el); }, `Pay ${d.child.name}`);
+  wireChores(el, () => renderKids(el));
+}
+
+function renderApprove(el, pending) {
+  if (!pending.length) { el.innerHTML = `<div class="card muted">Nothing waiting to be checked ✅</div>`; return; }
+  el.innerHTML = pending.map(p => `<div class="card row"><div style="font-size:30px">${esc(p.chore_emoji)}</div>
+    <div class="grow"><strong>${esc(p.chore_name)}</strong><div class="muted">${esc(p.child_name)} · ${niceDate(p.date)} · ${gbp(p.value)}</div></div>
+    <button class="small bad" data-id="${p.id}" data-a="reject">✗</button><button class="small good" data-id="${p.id}" data-a="approve">✓</button></div>`).join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = async () => { await POST(`api/completions/${b.dataset.id}/${b.dataset.a}`); renderParent(); });
+}
+
+async function renderManage(el) {
+  const [children, chores, bundles] = await Promise.all([GET('api/children'), GET('api/chores'), GET('api/bundles')]);
+  const byKid = (list, id) => list.filter(x => x.child_id === id);
+  el.innerHTML = `
+    <div class="row"><h2 class="grow">Children</h2><button class="small primary" id="addkid">+ Add child</button></div>
+    ${children.map(k => `<div class="card">
+      <div class="row"><div style="font-size:28px">${esc(k.emoji)}</div><div class="grow"><strong>${esc(k.name)}</strong>
+        <div class="muted">${k.pin ? 'PIN set' : 'No PIN'}${k.ha_user ? ' · HA user: ' + esc(k.ha_user) : ''}</div></div>
+        <button class="small" data-edit-kid="${k.id}">Edit</button></div>
+      <div class="row" style="margin-top:12px"><h2 class="grow" style="margin:0">Chores</h2><button class="small" data-add-chore="${k.id}">+ Chore</button></div>
+      <div class="list">${byKid(chores, k.id).filter(c => c.active).map(c => `<div><span>${esc(c.emoji)}</span><span class="grow">${esc(c.name)} <span class="muted">${freqLabel(c)}${c.needs_approval ? '' : ' · auto-approve'}</span></span><span>${gbp(c.value)}</span><button class="small" data-edit-chore="${c.id}">Edit</button></div>`).join('') || '<div class="muted">No chores yet</div>'}</div>
+      <div class="row" style="margin-top:12px"><h2 class="grow" style="margin:0">Goals</h2><button class="small" data-add-bundle="${k.id}">+ Goal</button></div>
+      <div class="list">${byKid(bundles, k.id).filter(b => b.active).map(b => `<div><span>🎯</span><span class="grow">${esc(b.name)} <span class="muted">${b.target} chores a ${b.period}${b.chore_ids.length ? ' from ' + b.chore_ids.length + ' chosen' : ''}</span></span><span>${gbp(b.reward)}</span><button class="small" data-edit-bundle="${b.id}">Edit</button></div>`).join('') || '<div class="muted">No goals yet</div>'}</div>
+    </div>`).join('')}`;
+
+  const kidForm = (k) => form(`<label>Name</label><input name="name" value="${esc(k?.name || '')}" required>
+      <label>Emoji</label><input name="emoji" value="${esc(k?.emoji || '⭐')}">
+      <label>PIN for the tablet (4–8 digits, blank for none)</label><input name="pin" inputmode="numeric" value="${esc(k?.pin || '')}">
+      <label>Home Assistant username (logs straight in)</label><input name="haUser" value="${esc(k?.ha_user || '')}">
+      ${k ? `<button type="button" class="bad small" id="delkid" style="margin-top:12px">Delete child and all their history</button>` : ''}`,
+    async (f) => {
+      const body = { name: f.get('name'), emoji: f.get('emoji'), pin: f.get('pin'), haUser: f.get('haUser') };
+      if (body.pin && !/^\d{4,8}$/.test(body.pin)) throw new Error('PIN must be 4–8 digits');
+      await (k ? PUT('api/children/' + k.id, body) : POST('api/children', body)); renderManage(el);
+    }, k ? 'Edit child' : 'Add child');
+  const choreForm = (childId, c) => {
+    const d = form(`<label>Chore</label><input name="name" value="${esc(c?.name || '')}" required>
+      <label>Emoji</label><input name="emoji" value="${esc(c?.emoji || '🧹')}">
+      <label>Worth (£) – leave 0 if it only counts towards a goal</label><input name="value" type="number" step="0.01" min="0" value="${c ? (c.value / 100).toFixed(2) : '0.50'}">
+      <label>How often</label><select name="frequency"><option value="daily">Every day</option><option value="days">Certain days</option><option value="weekly">Once a week</option><option value="anytime">Any time (extra job)</option></select>
+      <div id="dayswrap" style="display:none"><label>Days</label><div class="days">${DAYS.map((n, i) => `<button type="button" data-d="${i + 1}">${n}</button>`).join('')}</div></div>
+      <label><input type="checkbox" name="needsApproval" style="width:auto" ${c ? (c.needs_approval ? 'checked' : '') : 'checked'}> A grown-up checks it before it counts</label>
+      ${c ? `<button type="button" class="bad small" id="delchore" style="margin-top:12px">Remove chore</button>` : ''}`,
+      async (f) => {
+        const days = [...d.querySelectorAll('.days button.on')].map(b => Number(b.dataset.d));
+        const body = { childId, name: f.get('name'), emoji: f.get('emoji'), value: Math.round(Number(f.get('value')) * 100), frequency: f.get('frequency'), days, needsApproval: !!f.get('needsApproval') };
+        await (c ? PUT('api/chores/' + c.id, body) : POST('api/chores', body)); renderManage(el);
+      }, c ? 'Edit chore' : 'Add chore');
+    const sel = $('[name=frequency]', d); sel.value = c?.frequency || 'daily';
+    const showDays = () => $('#dayswrap', d).style.display = sel.value === 'days' ? '' : 'none';
+    sel.onchange = showDays; showDays();
+    d.querySelectorAll('.days button').forEach(b => { if (c && c.days.split(',').includes(b.dataset.d)) b.classList.add('on'); b.onclick = () => b.classList.toggle('on'); });
+    if (c) $('#delchore', d).onclick = async () => { if (await confirmDlg(`Remove "${c.name}"?`)) { await DEL('api/chores/' + c.id); d.close(); renderManage(el); } };
+  };
+  const bundleForm = (childId, b) => {
+    const kidChores = byKid(chores, childId).filter(c => c.active);
+    const d = form(`<label>Goal name</label><input name="name" value="${esc(b?.name || 'Weekly bonus')}" required>
+      <label>Period</label><select name="period"><option value="week">Each week (Mon–Sun)</option><option value="month">Each month</option></select>
+      <label>Chores needed in the period</label><input name="target" type="number" min="1" value="${b?.target || 5}" required>
+      <label>Reward at the end (£)</label><input name="reward" type="number" step="0.01" min="0" value="${b ? (b.reward / 100).toFixed(2) : '2.00'}" required>
+      <label>Which chores count (none ticked = all of them)</label>
+      ${kidChores.map(c => `<label style="margin:4px 0"><input type="checkbox" name="cid" value="${c.id}" style="width:auto" ${b?.chore_ids.includes(c.id) ? 'checked' : ''}> ${esc(c.emoji)} ${esc(c.name)}</label>`).join('') || '<div class="muted">Add some chores first</div>'}
+      ${b ? `<button type="button" class="bad small" id="delbundle" style="margin-top:12px">Delete goal</button>` : ''}`,
+      async (f) => {
+        const body = { childId, name: f.get('name'), period: f.get('period'), target: Number(f.get('target')), reward: Math.round(Number(f.get('reward')) * 100), choreIds: f.getAll('cid').map(Number) };
+        await (b ? PUT('api/bundles/' + b.id, body) : POST('api/bundles', body)); renderManage(el);
+      }, b ? 'Edit goal' : 'Add goal');
+    $('[name=period]', d).value = b?.period || 'week';
+    if (b) $('#delbundle', d).onclick = async () => { if (await confirmDlg(`Delete "${b.name}"? Past rewards from it will be removed from the balance.`)) { await DEL('api/bundles/' + b.id); d.close(); renderManage(el); } };
+  };
+
+  $('#addkid', el).onclick = () => kidForm(null);
+  el.querySelectorAll('[data-edit-kid]').forEach(b => b.onclick = () => {
+    const k = children.find(x => x.id === Number(b.dataset.editKid)); const d = kidForm(k);
+    $('#delkid', d).onclick = async () => { if (await confirmDlg(`Delete ${k.name} and everything recorded for them?`)) { await DEL('api/children/' + k.id); d.close(); renderManage(el); } };
+  });
+  el.querySelectorAll('[data-add-chore]').forEach(b => b.onclick = () => choreForm(Number(b.dataset.addChore), null));
+  el.querySelectorAll('[data-edit-chore]').forEach(b => b.onclick = () => { const c = chores.find(x => x.id === Number(b.dataset.editChore)); choreForm(c.child_id, c); });
+  el.querySelectorAll('[data-add-bundle]').forEach(b => b.onclick = () => bundleForm(Number(b.dataset.addBundle), null));
+  el.querySelectorAll('[data-edit-bundle]').forEach(b => b.onclick = () => { const x = bundles.find(y => y.id === Number(b.dataset.editBundle)); bundleForm(x.child_id, x); });
+}
+
+async function renderSettings(el) {
+  const s = await GET('api/settings');
+  el.innerHTML = `<div class="card">
+    <h3 style="margin-top:0">Parent PIN</h3><input id="npin" inputmode="numeric" placeholder="New 4–8 digit PIN">
+    <button class="primary" id="savepin" style="margin-top:8px">Change PIN</button></div>
+    <div class="card"><h3 style="margin-top:0">Parent Home Assistant users</h3>
+    <p class="muted">These HA logins open the parent view without a PIN. Everyone else gets the PIN pad. You're signed in as <b>${esc(me.haUser || 'unknown')}</b>.</p>
+    <input id="pusers" value="${esc(s.parentHaUsers.join(', '))}" placeholder="tom, partner"><button class="primary" id="saveusers" style="margin-top:8px">Save</button></div>
+    <div class="card muted">Data lives in the add-on's /data folder (chores.db) and is included in Home Assistant backups.</div>`;
+  $('#savepin', el).onclick = async () => { try { await PUT('api/settings', { parentPin: $('#npin', el).value }); toast('PIN changed'); $('#npin', el).value = ''; } catch (e) { toast(e.message); } };
+  $('#saveusers', el).onclick = async () => { await PUT('api/settings', { parentHaUsers: $('#pusers', el).value.split(',').map(s => s.trim()).filter(Boolean) }); toast('Saved'); };
+}
+
+boot().catch(e => { app.innerHTML = `<div class="card err">${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>
