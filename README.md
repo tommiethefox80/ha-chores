@@ -4,9 +4,11 @@ A small chores and pocket-money tracker. Zero dependencies (Node + built-in SQLi
 
 ## Install (HA OS)
 
-1. Copy this folder to `/addons/chores` on the HA box (Samba share, SSH add-on, or the File editor – the folder is `addons` next to `config`).
-2. Settings → Add-ons → Add-on Store → ⋮ (top right) → **Check for updates**.
-3. Scroll to **Local add-ons**, open **Chores**, Install, Start. It appears in the sidebar as **Chores**.
+1. Settings → Add-ons → Add-on Store → ⋮ (top right) → **Repositories**.
+2. Add `https://github.com/tommiethefox80/ha-chores` and close.
+3. Find **Chores** in the store (refresh the page if needed), Install, Start. It appears in the sidebar as **Chores**.
+
+To ship an update: bump `version` in `chores/config.yaml`, push, then ⋮ → **Check for updates** in HA.
 
 Data is stored in the add-on's `/data/chores.db`, which is included in HA backups.
 
