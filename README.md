@@ -25,7 +25,18 @@ Ingress tells the add-on which HA user opened it:
 
 - **Chore** – price (can be £0 if it only counts towards a goal), frequency (every day / certain days / once a week / any time), and whether a grown-up must check it before it counts.
 - **Goal** – "do *N* chores each week or month and earn £X". Optionally restricted to a chosen set of chores. The reward is added to the balance once the period has ended and the target was met.
+- **Routine** – a non-money job (homework, shower, pack lunch) on the same schedules as chores. Shown in a separate "To do today" list, sorted by time, and never counted towards goals.
 - **Balance** = approved chore values + earned goal rewards − payouts.
+
+## Alerts
+
+Notifications go through Home Assistant's `notify` services, so any phone or tablet with the HA companion app can be picked.
+
+- **Settings → Parent alerts** – choose parent devices, and whether to be told when chores and/or routines are ticked off. Use **Send test** to check.
+- **Child → Send reminders to these devices** – the child's own devices.
+- **Each chore/routine** – *Remind at* sends the child a reminder if it isn't done yet; *Do by* turns it red, nudges the child again, and (if ticked) alerts parents that it was missed.
+
+Tapping a notification opens the Chores panel. Reminders more than 30 minutes old are skipped after a restart, so you won't get a burst of stale alerts.
 
 ## Local run
 

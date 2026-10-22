@@ -38,6 +38,8 @@
   .chore.done .tick { background: var(--good); border-color: var(--good); color: #fff; }
   .chore.pending { border-color: var(--warn); }
   .chore.pending .tick { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .chore.overdue { border-color: var(--bad); }
+  .chore.overdue .when { color: var(--bad); font-weight: 600; }
   .bar { height: 14px; background: var(--line); border-radius: 99px; overflow: hidden; }
   .bar > div { height: 100%; background: var(--good); border-radius: 99px; transition: width .4s; }
   .money { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
@@ -138,12 +140,14 @@ function renderPin() {
 }
 
 // ------------------------------------------------------------ child dashboard
-function choreRow(c, canUndo) {
+function choreRow(c, now) {
   const st = c.completion ? c.completion.status : null;
-  const cls = st === 'approved' ? 'done' : st === 'pending' ? 'pending' : '';
+  const overdue = !st && c.due_time && now && now > c.due_time;
+  const cls = st === 'approved' ? 'done' : st === 'pending' ? 'pending' : overdue ? 'overdue' : '';
   const tick = st === 'approved' ? '✓' : st === 'pending' ? '⏳' : '';
-  const note = st === 'pending' ? 'Waiting for a grown-up to check' : st === 'approved' ? 'Done!' : freqLabel(c);
-  return `<div class="chore ${cls}" data-id="${c.id}" data-cid="${c.completion ? c.completion.id : ''}" data-st="${st || ''}">
+  const when = c.due_time ? `<span class="when">${overdue ? 'Was due by ' : 'By '}${esc(c.due_time)}</span>` : '';
+  const note = st === 'pending' ? 'Waiting for a grown-up to check' : st === 'approved' ? 'Done!' : (when || freqLabel(c));
+  return `<div class="chore ${cls}" data-id="${c.id}" data-kind="${c.kind}" data-cid="${c.completion ? c.completion.id : ''}" data-st="${st || ''}">
     <div class="emoji">${esc(c.emoji)}</div>
     <div class="grow"><div class="name">${esc(c.name)}</div><div class="muted">${note}</div></div>
     <div style="font-weight:600">${c.value ? gbp(c.value) : ''}</div><div class="tick">${tick}</div></div>`;
@@ -166,20 +170,22 @@ function dashboardHtml(d, asParent) {
         <div class="bar" style="margin-top:10px"><div style="width:${pct}%"></div></div>
         <div class="muted" style="margin-top:6px">${left === 0 ? '🎉 Goal reached – reward lands at the end of the ' + b.period + '!' : left + ' more to go' + (b.progress.pending ? ` (${b.progress.pending} waiting to be checked)` : '')}</div></div>`;
     }).join('')}
-    <h2>Today ${d.todays.length ? `· ${todayDone}/${d.todays.length}` : ''}</h2>
-    ${d.todays.length ? d.todays.map(c => choreRow(c)).join('') : '<div class="card muted">Nothing due today 🎈</div>'}
-    ${d.anytime.length ? `<h2>Extra jobs</h2>${d.anytime.map(c => choreRow(c)).join('')}` : ''}
+    ${d.routines.length ? `<h2>To do today · ${d.routines.filter(c => c.completion && c.completion.status !== 'rejected').length}/${d.routines.length}</h2>${d.routines.map(c => choreRow(c, d.now)).join('')}` : ''}
+    <h2>Chores ${d.todays.length ? `· ${todayDone}/${d.todays.length}` : ''}</h2>
+    ${d.todays.length ? d.todays.map(c => choreRow(c, d.now)).join('') : '<div class="card muted">No chores due today 🎈</div>'}
+    ${d.anytime.length ? `<h2>Extra jobs</h2>${d.anytime.map(c => choreRow(c, d.now)).join('')}` : ''}
     <h2>Recent</h2>
-    <div class="card list">${d.history.length ? d.history.slice(0, 10).map(h => `<div><span>${esc(h.emoji)}</span><span class="grow">${esc(h.name)} <span class="muted">${niceDate(h.date)}</span></span><span class="pill ${h.status}">${h.status}</span><span>${gbp(h.value)}</span></div>`).join('') : '<div class="muted">No chores done yet</div>'}</div>
+    <div class="card list">${d.history.length ? d.history.slice(0, 10).map(h => `<div><span>${esc(h.emoji)}</span><span class="grow">${esc(h.name)} <span class="muted">${niceDate(h.date)}</span></span><span class="pill ${h.status}">${h.kind === 'routine' && h.status === 'approved' ? 'done' : h.status}</span><span>${h.kind === 'routine' ? '' : gbp(h.value)}</span></div>`).join('') : '<div class="muted">Nothing done yet</div>'}</div>
     ${d.payouts.length ? `<h2>Paid out</h2><div class="card list">${d.payouts.map(p => `<div><span class="grow">${niceDate(p.date)} ${p.note ? '· ' + esc(p.note) : ''}</span><span>${gbp(p.amount)}</span></div>`).join('')}</div>` : ''}`;
 }
 function wireChores(container, reload) {
   container.querySelectorAll('.chore').forEach(el => el.onclick = async () => {
     const st = el.dataset.st;
     try {
-      if (!st || st === 'rejected') { await POST('api/complete', { choreId: Number(el.dataset.id) }); toast('Nice one! ⭐'); }
-      else if (st === 'pending') { if (await confirmDlg('Undo this chore?')) await DEL('api/completions/' + el.dataset.cid); }
-      else if (st === 'approved' && me.role === 'parent') { if (await confirmDlg('Remove this approved chore?')) await DEL('api/completions/' + el.dataset.cid); }
+      const routine = el.dataset.kind === 'routine';
+      if (!st || st === 'rejected') { await POST('api/complete', { choreId: Number(el.dataset.id) }); toast(routine ? 'Done ✅' : 'Nice one! ⭐'); }
+      else if (st === 'pending') { if (await confirmDlg('Undo this?')) await DEL('api/completions/' + el.dataset.cid); }
+      else if (st === 'approved' && (me.role === 'parent' || routine)) { if (await confirmDlg('Mark as not done?')) await DEL('api/completions/' + el.dataset.cid); }
       else return toast('Already done – well done!');
       reload();
     } catch (e) { toast(e.message); }
@@ -240,7 +246,7 @@ function renderApprove(el, pending) {
 }
 
 async function renderManage(el) {
-  const [children, chores, bundles] = await Promise.all([GET('api/children'), GET('api/chores'), GET('api/bundles')]);
+  const [children, chores, bundles, nt] = await Promise.all([GET('api/children'), GET('api/chores'), GET('api/bundles'), GET('api/notify-targets')]);
   const byKid = (list, id) => list.filter(x => x.child_id === id);
   el.innerHTML = `
     <div class="row"><h2 class="grow">Children</h2><button class="small primary" id="addkid">+ Add child</button></div>
@@ -249,7 +255,9 @@ async function renderManage(el) {
         <div class="muted">${k.pin ? 'PIN set' : 'No PIN'}${k.ha_user ? ' · HA user: ' + esc(k.ha_user) : ''}</div></div>
         <button class="small" data-edit-kid="${k.id}">Edit</button></div>
       <div class="row" style="margin-top:12px"><h2 class="grow" style="margin:0">Chores</h2><button class="small" data-add-chore="${k.id}">+ Chore</button></div>
-      <div class="list">${byKid(chores, k.id).filter(c => c.active).map(c => `<div><span>${esc(c.emoji)}</span><span class="grow">${esc(c.name)} <span class="muted">${freqLabel(c)}${c.needs_approval ? '' : ' · auto-approve'}</span></span><span>${gbp(c.value)}</span><button class="small" data-edit-chore="${c.id}">Edit</button></div>`).join('') || '<div class="muted">No chores yet</div>'}</div>
+      <div class="list">${byKid(chores, k.id).filter(c => c.active && c.kind === 'chore').map(c => `<div><span>${esc(c.emoji)}</span><span class="grow">${esc(c.name)} <span class="muted">${freqLabel(c)}${c.due_time ? ' by ' + esc(c.due_time) : ''}${c.remind_time ? ' · 🔔 ' + esc(c.remind_time) : ''}${c.needs_approval ? '' : ' · auto-approve'}</span></span><span>${gbp(c.value)}</span><button class="small" data-edit-chore="${c.id}">Edit</button></div>`).join('') || '<div class="muted">No chores yet</div>'}</div>
+      <div class="row" style="margin-top:12px"><h2 class="grow" style="margin:0">Routines <span style="text-transform:none;letter-spacing:0">(no money)</span></h2><button class="small" data-add-routine="${k.id}">+ Routine</button></div>
+      <div class="list">${byKid(chores, k.id).filter(c => c.active && c.kind === 'routine').sort((a, b) => (a.due_time || '99').localeCompare(b.due_time || '99')).map(c => `<div><span>${esc(c.emoji)}</span><span class="grow">${esc(c.name)} <span class="muted">${freqLabel(c)}${c.due_time ? ' by ' + esc(c.due_time) : ''}${c.remind_time ? ' · 🔔 ' + esc(c.remind_time) : ''}${c.needs_approval ? ' · checked by you' : ''}</span></span><button class="small" data-edit-chore="${c.id}">Edit</button></div>`).join('') || '<div class="muted">No routines yet</div>'}</div>
       <div class="row" style="margin-top:12px"><h2 class="grow" style="margin:0">Goals</h2><button class="small" data-add-bundle="${k.id}">+ Goal</button></div>
       <div class="list">${byKid(bundles, k.id).filter(b => b.active).map(b => `<div><span>🎯</span><span class="grow">${esc(b.name)} <span class="muted">${b.target} chores a ${b.period}${b.chore_ids.length ? ' from ' + b.chore_ids.length + ' chosen' : ''}</span></span><span>${gbp(b.reward)}</span><button class="small" data-edit-bundle="${b.id}">Edit</button></div>`).join('') || '<div class="muted">No goals yet</div>'}</div>
     </div>`).join('')}`;
@@ -258,33 +266,40 @@ async function renderManage(el) {
       <label>Emoji</label><input name="emoji" value="${esc(k?.emoji || '⭐')}">
       <label>PIN for the tablet (4–8 digits, blank for none)</label><input name="pin" inputmode="numeric" value="${esc(k?.pin || '')}">
       <label>Home Assistant username (logs straight in)</label><input name="haUser" value="${esc(k?.ha_user || '')}">
+      <label>Send reminders to these devices</label>${deviceChecks(nt, k?.notify_targets || [], 'nt')}
       ${k ? `<button type="button" class="bad small" id="delkid" style="margin-top:12px">Delete child and all their history</button>` : ''}`,
     async (f) => {
-      const body = { name: f.get('name'), emoji: f.get('emoji'), pin: f.get('pin'), haUser: f.get('haUser') };
+      const body = { name: f.get('name'), emoji: f.get('emoji'), pin: f.get('pin'), haUser: f.get('haUser'), notifyTargets: f.getAll('nt') };
       if (body.pin && !/^\d{4,8}$/.test(body.pin)) throw new Error('PIN must be 4–8 digits');
       await (k ? PUT('api/children/' + k.id, body) : POST('api/children', body)); renderManage(el);
     }, k ? 'Edit child' : 'Add child');
-  const choreForm = (childId, c) => {
-    const d = form(`<label>Chore</label><input name="name" value="${esc(c?.name || '')}" required>
-      <label>Emoji</label><input name="emoji" value="${esc(c?.emoji || '🧹')}">
-      <label>Worth (£) – leave 0 if it only counts towards a goal</label><input name="value" type="number" step="0.01" min="0" value="${c ? (c.value / 100).toFixed(2) : '0.50'}">
-      <label>How often</label><select name="frequency"><option value="daily">Every day</option><option value="days">Certain days</option><option value="weekly">Once a week</option><option value="anytime">Any time (extra job)</option></select>
+  const choreForm = (childId, c, kind = c?.kind || 'chore') => {
+    const R = kind === 'routine', noun = R ? 'routine' : 'chore';
+    const d = form(`<label>${R ? 'Routine' : 'Chore'}</label><input name="name" value="${esc(c?.name || '')}" placeholder="${R ? 'e.g. Homework, Shower, Pack lunch' : 'e.g. Make bed'}" required>
+      <label>Emoji</label><input name="emoji" value="${esc(c?.emoji || (R ? '✅' : '🧹'))}">
+      ${R ? '' : `<label>Worth (£) – leave 0 if it only counts towards a goal</label><input name="value" type="number" step="0.01" min="0" value="${c ? (c.value / 100).toFixed(2) : '0.50'}">`}
+      <label>How often</label><select name="frequency"><option value="daily">Every day</option><option value="days">Certain days</option><option value="weekly">Once a week</option>${R ? '' : '<option value="anytime">Any time (extra job)</option>'}</select>
       <div id="dayswrap" style="display:none"><label>Days</label><div class="days">${DAYS.map((n, i) => `<button type="button" data-d="${i + 1}">${n}</button>`).join('')}</div></div>
-      <label><input type="checkbox" name="needsApproval" style="width:auto" ${c ? (c.needs_approval ? 'checked' : '') : 'checked'}> A grown-up checks it before it counts</label>
-      ${c ? `<button type="button" class="bad small" id="delchore" style="margin-top:12px">Remove chore</button>` : ''}`,
+      <div id="timeswrap">
+      <label>Remind at (optional – sends a reminder to their devices if it isn't done)</label><input name="remindTime" type="time" value="${esc(c?.remind_time || '')}">
+      <label>Do by (optional – shows red and nudges them again if it's missed)</label><input name="dueTime" type="time" value="${esc(c?.due_time || '')}">
+      <label><input type="checkbox" name="alertParents" style="width:auto" ${c?.alert_parents ? 'checked' : ''}> Alert parents if it's not done by then</label>
+      </div>
+      <label><input type="checkbox" name="needsApproval" style="width:auto" ${c ? (c.needs_approval ? 'checked' : '') : (R ? '' : 'checked')}> A grown-up checks it ${R ? 'off' : 'before it counts'}</label>
+      ${c ? `<button type="button" class="bad small" id="delchore" style="margin-top:12px">Remove ${noun}</button>` : ''}`,
       async (f) => {
         const days = [...d.querySelectorAll('.days button.on')].map(b => Number(b.dataset.d));
-        const body = { childId, name: f.get('name'), emoji: f.get('emoji'), value: Math.round(Number(f.get('value')) * 100), frequency: f.get('frequency'), days, needsApproval: !!f.get('needsApproval') };
+        const body = { childId, kind, name: f.get('name'), emoji: f.get('emoji'), value: R ? 0 : Math.round(Number(f.get('value')) * 100), frequency: f.get('frequency'), days, dueTime: f.get('dueTime'), remindTime: f.get('remindTime'), alertParents: !!f.get('alertParents'), needsApproval: !!f.get('needsApproval') };
         await (c ? PUT('api/chores/' + c.id, body) : POST('api/chores', body)); renderManage(el);
-      }, c ? 'Edit chore' : 'Add chore');
+      }, (c ? 'Edit ' : 'Add ') + noun);
     const sel = $('[name=frequency]', d); sel.value = c?.frequency || 'daily';
-    const showDays = () => $('#dayswrap', d).style.display = sel.value === 'days' ? '' : 'none';
+    const showDays = () => { $('#dayswrap', d).style.display = sel.value === 'days' ? '' : 'none'; $('#timeswrap', d).style.display = sel.value === 'anytime' ? 'none' : ''; };
     sel.onchange = showDays; showDays();
     d.querySelectorAll('.days button').forEach(b => { if (c && c.days.split(',').includes(b.dataset.d)) b.classList.add('on'); b.onclick = () => b.classList.toggle('on'); });
     if (c) $('#delchore', d).onclick = async () => { if (await confirmDlg(`Remove "${c.name}"?`)) { await DEL('api/chores/' + c.id); d.close(); renderManage(el); } };
   };
   const bundleForm = (childId, b) => {
-    const kidChores = byKid(chores, childId).filter(c => c.active);
+    const kidChores = byKid(chores, childId).filter(c => c.active && c.kind === 'chore');
     const d = form(`<label>Goal name</label><input name="name" value="${esc(b?.name || 'Weekly bonus')}" required>
       <label>Period</label><select name="period"><option value="week">Each week (Mon–Sun)</option><option value="month">Each month</option></select>
       <label>Chores needed in the period</label><input name="target" type="number" min="1" value="${b?.target || 5}" required>
@@ -305,15 +320,31 @@ async function renderManage(el) {
     const k = children.find(x => x.id === Number(b.dataset.editKid)); const d = kidForm(k);
     $('#delkid', d).onclick = async () => { if (await confirmDlg(`Delete ${k.name} and everything recorded for them?`)) { await DEL('api/children/' + k.id); d.close(); renderManage(el); } };
   });
-  el.querySelectorAll('[data-add-chore]').forEach(b => b.onclick = () => choreForm(Number(b.dataset.addChore), null));
+  el.querySelectorAll('[data-add-chore]').forEach(b => b.onclick = () => choreForm(Number(b.dataset.addChore), null, 'chore'));
+  el.querySelectorAll('[data-add-routine]').forEach(b => b.onclick = () => choreForm(Number(b.dataset.addRoutine), null, 'routine'));
   el.querySelectorAll('[data-edit-chore]').forEach(b => b.onclick = () => { const c = chores.find(x => x.id === Number(b.dataset.editChore)); choreForm(c.child_id, c); });
   el.querySelectorAll('[data-add-bundle]').forEach(b => b.onclick = () => bundleForm(Number(b.dataset.addBundle), null));
   el.querySelectorAll('[data-edit-bundle]').forEach(b => b.onclick = () => { const x = bundles.find(y => y.id === Number(b.dataset.editBundle)); bundleForm(x.child_id, x); });
 }
 
+// device picker from HA notify services; keeps any saved targets that HA no longer lists
+function deviceChecks(nt, selected, name) {
+  const all = [...new Set([...nt.targets, ...selected])];
+  if (!all.length) return `<div class="muted">${nt.connected ? 'No notify services found in Home Assistant. Install the HA app on a phone and sign in, and it will appear here.' : 'Not connected to Home Assistant (running outside the add-on), so no devices to pick.'}</div>`;
+  const nice = (t) => t.startsWith('mobile_app_') ? '📱 ' + t.slice(11).replace(/_/g, ' ') : t === 'persistent_notification' ? '🔔 HA sidebar notification' : t.replace(/_/g, ' ');
+  return all.map(t => `<label style="margin:6px 0;color:var(--ink);font-size:15px"><input type="checkbox" name="${name}" value="${esc(t)}" style="width:auto" ${selected.includes(t) ? 'checked' : ''}> ${esc(nice(t))}${nt.targets.includes(t) ? '' : ' <span class="muted">(not found)</span>'}</label>`).join('');
+}
+
 async function renderSettings(el) {
-  const s = await GET('api/settings');
-  el.innerHTML = `<div class="card">
+  const [s, nt] = await Promise.all([GET('api/settings'), GET('api/notify-targets')]);
+  el.innerHTML = `<div class="card"><h3 style="margin-top:0">Parent alerts</h3>
+    <p class="muted">Which devices get told when jobs are done or missed.</p>
+    <div id="pdev">${deviceChecks(nt, s.parentNotifyTargets, 'pt')}</div>
+    <label style="color:var(--ink);font-size:15px;margin-top:12px"><input type="checkbox" id="onchore" style="width:auto" ${s.notifyOnChore ? 'checked' : ''}> Tell me when a chore is ticked off</label>
+    <label style="color:var(--ink);font-size:15px"><input type="checkbox" id="onroutine" style="width:auto" ${s.notifyOnRoutine ? 'checked' : ''}> Tell me when a routine is ticked off</label>
+    <p class="muted">Alerts for missed jobs are switched on per chore or routine, under Set up.</p>
+    <div class="row" style="margin-top:8px"><button class="primary" id="savealerts">Save</button><button id="testalerts">Send test</button></div></div>
+    <div class="card">
     <h3 style="margin-top:0">Parent PIN</h3><input id="npin" inputmode="numeric" placeholder="New 4–8 digit PIN">
     <button class="primary" id="savepin" style="margin-top:8px">Change PIN</button></div>
     <div class="card"><h3 style="margin-top:0">Parent Home Assistant users</h3>
@@ -322,6 +353,11 @@ async function renderSettings(el) {
     <div class="card muted">Data lives in the add-on's /data folder (chores.db) and is included in Home Assistant backups.</div>`;
   $('#savepin', el).onclick = async () => { try { await PUT('api/settings', { parentPin: $('#npin', el).value }); toast('PIN changed'); $('#npin', el).value = ''; } catch (e) { toast(e.message); } };
   $('#saveusers', el).onclick = async () => { await PUT('api/settings', { parentHaUsers: $('#pusers', el).value.split(',').map(s => s.trim()).filter(Boolean) }); toast('Saved'); };
+  const picked = () => [...el.querySelectorAll('input[name=pt]:checked')].map(i => i.value);
+  $('#savealerts', el).onclick = async () => { await PUT('api/settings', { parentNotifyTargets: picked(), notifyOnChore: $('#onchore', el).checked, notifyOnRoutine: $('#onroutine', el).checked }); toast('Alerts saved'); };
+  $('#testalerts', el).onclick = async () => {
+    try { const r = await POST('api/notify-test', { targets: picked() }); const bad = Object.entries(r.results).filter(([, v]) => v !== 'ok');
+      toast(bad.length ? 'Failed: ' + bad.map(([k]) => k).join(', ') : 'Test sent'); } catch (e) { toast(e.message); } };
 }
 
 boot().catch(e => { app.innerHTML = `<div class="card err">${esc(e.message)}</div>`; });
